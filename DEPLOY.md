@@ -1,6 +1,6 @@
 # 部署到 Cloudflare Pages（免费 HTTPS + PWA）
 
-本项目 = 静态前端（网页 + PWA）+ Serverless 函数（`functions/`，负责抓热搜、存众包数据）。
+本项目 = 静态前端（网页 + PWA）+ Serverless 函数（`functions/`，负责抓热搜、存热搜采样）。
 用 **Cloudflare Pages** 一个平台就能跑全部，全免费，自带 HTTPS、CDN、PWA。
 
 ## 你需要准备
@@ -20,13 +20,13 @@
 cd social-heatmap
 git init
 git add -A
-git commit -m "one-day rhythm + hangzhou crowdsource (PWA)"
+git commit -m "one-day rhythm + hangzhou city heatmap (PWA)"
 ```
 
 然后在 GitHub 上建一个仓库，按提示 `git remote add` + `git push` 推上去。
 
 ### 2. 创建 Cloudflare KV 命名空间
-数据（众包上报、热搜采样）存在 Cloudflare 的**键值存储（KV）**里，需要先建一个：
+数据（热搜采样）存在 Cloudflare 的**键值存储（KV）**里，需要先建一个：
 
 1. 登录 Cloudflare 控制台 → 左侧「Workers & Pages」→ 「KV」；
 2. 点「Create namespace」，名字填 `DATA`，记下它的 **namespace ID**。
@@ -66,4 +66,4 @@ git commit -m "one-day rhythm + hangzhou crowdsource (PWA)"
 python3 server.py 8090
 ```
 
-打开 `http://127.0.0.1:8090`。本地用 `server.py`，云端用 `functions/`，两者接口一致（`/api/rhythm`、`/api/hangzhou`、`/api/report`），前端代码不用改。
+打开 `http://127.0.0.1:8090`。本地用 `server.py`，云端用 `functions/`，接口一致（`/api/rhythm`），前端代码不用改。

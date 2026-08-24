@@ -1,5 +1,14 @@
-/* Service Worker - 缓存 app shell，API 始终走网络保证实时 */
-const CACHE = "rhythm-v1";
+/* Service Worker - 让"远程同步更新"生效
+ *
+ * 关键改动：页面壳（HTML / 导航请求）改成「网络优先」：
+ *   每次打开都先拉服务器最新版，拉不到才用本地缓存（离线兜底）。
+ *   这样你改完服务器上的 index.html 后，用户手机下一次打开就自动更新，
+ *   无需重新打包、无需重装。
+ *
+ * 静态资源（js/css/图片）用「缓存优先 + 后台刷新」，兼顾速度和更新。
+ * API 请求（/api/*）和跨域请求始终走网络。
+ */
+const CACHE = "rhythm-v2";
 const SHELL = [
   "/",
   "/index.html",
@@ -31,21 +40,38 @@ self.addEventListener("activate", (e) => {
 self.addEventListener("fetch", (e) => {
   if (e.request.method !== "GET") return;
   const url = new URL(e.request.url);
-  // 数据接口始终走网络，页面壳走缓存优先
+
+  // 跨域 & 数据接口：永远走网络，保证实时
   if (url.origin !== self.location.origin || url.pathname.startsWith("/api/")) {
     e.respondWith(fetch(e.request));
     return;
   }
+
+  // 页面导航（HTML 壳）：网络优先，离线才回退缓存
+  if (e.request.mode === "navigate") {
+    e.respondWith(
+      fetch(e.request)
+        .then((res) => {
+          const copy = res.clone();
+          caches.open(CACHE).then((c) => c.put(e.request, copy));
+          return res;
+        })
+        .catch(() => caches.match(e.request).then((hit) => hit || caches.match("/")))
+    );
+    return;
+  }
+
+  // 静态资源：缓存优先，同时后台拉新版本替换
   e.respondWith(
     caches.match(e.request).then((hit) => {
-      if (hit) return hit;
-      return fetch(e.request).then((res) => {
+      const update = fetch(e.request).then((res) => {
         if (res.ok) {
           const copy = res.clone();
           caches.open(CACHE).then((c) => c.put(e.request, copy));
         }
         return res;
-      }).catch(() => caches.match("/"));
+      }).catch(() => hit);
+      return hit || update;
     })
   );
 });

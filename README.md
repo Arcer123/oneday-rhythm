@@ -1,4 +1,4 @@
-# 一天话题节奏 & 杭州噪音/空气众包地图
+# 一天话题节奏 & 杭州城市热力
 
 一个零依赖、浏览器即开即用的轻量 Web 应用，包含两个独立功能。
 
@@ -42,11 +42,18 @@ python3 server.py 8090
 
 右上角「⚡ 抓取此刻热搜」会去抓 **微博实时热搜**，标到时间轴上的"此刻"竖线上，并判断主导情绪。
 
-> 数据说明：热力分布默认使用**演示样本**（符合常识的日均节奏）。要得到**真实的一天分布**：接口会在每次抓热搜时把带时间戳的数据存入 `data/records/hot_history.json`（最多保留 60 次），跑一段时间后就能据此统计出真实的 24h 话题节奏。
+> 数据说明：热力分布默认使用**演示基线**（符合常识的日均节奏）。每次抓取"此刻热搜"时，接口都会把带时间戳的热搜存入 `data/records/hot_history.json`（最多保留 240 次），并**实时统计**出真实的 24h 节奏。页面会显示「采样累计次数 · 覆盖时段 · 学习进度」，采样越多，热力图越趋近真实分布（未被采样的时段暂用演示基线补全）。
 
-### 2. 杭州噪音/空气众包地图
+**自动采样**（无需手动点按钮也能攒数据）：
+- **本地 `server.py`**：启动即自动开启后台采样线程，默认每 **15 分钟**抓一次热搜（用环境变量 `SAMPLE_INTERVAL_MIN` 可改，如 `SAMPLE_INTERVAL_MIN=5 python3 server.py`）。
+- **页面打开时**：前端会每 15 分钟静默请求一次 `/api/rhythm?live=1`，照样积累样本（本地/云端都适用）。
+- **Cloudflare 部署版**：Serverless 无法常驻线程，可让外界定时任务（UptimeRobot / GitHub Actions / Cloudflare Cron Worker 等）周期调用 `https://你的域名/api/rhythm?live=1` 达到等效的自动采样。
 
-点击地图选取位置 → 填类型 / 强度 / 备注 → 提交。噪音（红）与空气（蓝）聚合成热力图，可分别开关。数据持久化到 `data/hangzhou_reports.json`。
+### 2. 杭州城市热力（实时天气 / 空气）
+
+基于 Open-Meteo 公开接口，绘制杭州实时的城市级热力图层，可在「🌡️ 温度 / 🌧️ 降水 / 🌫️ 空气(AQI)」之间切换：
+- **空气层**是真实 **European AQI**（Open-Meteo 空气质量接口），按 0.04° 格点取值，替代了原来的假空气种子点。
+- 另有「🏢 繁华（`hz_density.json`，由 `fetch_density.py` 抓 **高德 / 百度 POI** 生成）」与「📰 事件（`events.json`）」图层。
 
 ## 目录结构
 
@@ -58,11 +65,13 @@ social-heatmap/
 ├── sw.js                        # Service Worker（离线缓存 app shell）
 ├── icon-192.png / icon-512.png / apple-touch-icon.png   # 应用图标
 ├── DEPLOY.md                    # Cloudflare Pages 部署指南
-├── functions/api/               # Cloudflare Serverless 函数（rhythm / hangzhou / report）
+├── functions/api/               # Cloudflare Serverless 函数（rhythm）
+├── fetch_density.py             # 抓高德/百度/OSM POI → hz_density.json（繁华度）
+├── hz_density.json              # 繁华度热力数据（真实 POI）
+├── events.json                  # 事件数据
 ├── vendor/                      # 本地化前端库 + 中国 GeoJSON
 └── data/
     ├── emotion_demo.json        # （保留）情绪演示数据接口
-    ├── hangzhou_reports.json    # 众包上报持久化
     └── records/hot_history.json # 热搜采样历史（用于统计真实的一天分布）
 ```
 
@@ -71,9 +80,9 @@ social-heatmap/
 | 方法 | 路径 | 说明 |
 |------|------|------|
 | GET | `/api/rhythm` | 一天话题节奏。`?live=1` 抓取微博热搜并记录采样 |
-| GET | `/api/hangzhou` | 所有众包上报点 |
-| POST | `/api/report` | 上报一个点，写入 `data/hangzhou_reports.json` |
 | GET | `/api/emotion` | （保留）省份情绪接口，`?live=1` 抓取微博热搜 |
+| GET | `/hz_density.json` | 繁华度热力数据（静态托管） |
+| GET | `/events.json` | 事件数据（静态托管） |
 
 ## 技术栈
 
@@ -84,5 +93,6 @@ social-heatmap/
 ## 后续可接的真实数据
 
 - **话题节奏**：微博热搜按小时采样累积（已做）、话题阅读量时间序列、评论情感分析
-- **空气/噪音**：官方环境监测 API（杭州监测站）、用户众包上报（已接）
+- **空气**：Open-Meteo 空气质量 AQI（已接）；如需国标/站点级可换 aqicn / 国控站
+- **繁华度**：高德 / 百度 POI（脚本已备：设置 `AMAP_KEY` / `BAIDU_AK` 后运行 `python3 fetch_density.py` 生成真实数据）
 - 项目目前是 Web 版；接口结构可直接迁移到 iOS（SwiftUI 调同一套接口）

@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>一天话题节奏 · 杭州众包地图</title>
+<title>一天话题节奏 · 杭州城市热力</title>
 <link rel="stylesheet" href="vendor/leaflet.css">
 <link rel="manifest" href="/manifest.json">
 <link rel="apple-touch-icon" href="/apple-touch-icon.png">
@@ -76,7 +76,7 @@
   .btn { width: 100%; padding: 9px; border-radius: 8px; border: none; background: var(--accent);
     color: #fff; font-size: 14px; cursor: pointer; font-weight: 600; }
   .btn:hover { opacity: .9; }
-  .switch-row { display: flex; gap: 8px; margin: 10px 0; }
+  .switch-row { display: flex; flex-wrap: wrap; gap: 8px; margin: 10px 0; }
   .layer-tog { padding: 7px 9px; border: 1px solid var(--line); border-radius: 8px; background: var(--bg);
     color: var(--muted); cursor: pointer; font-size: 12px; flex: 1; }
   .layer-tog.active { color: var(--text); border-color: var(--accent); }
@@ -119,6 +119,7 @@
     <div class="panel" id="rhythm-info">
       <h3>🌗 大家的一天在聊什么</h3>
       <div class="src" id="rhythm-src">数据源：演示样本</div>
+      <div class="src" id="auto-sample" style="margin-top:4px;"></div>
       <div class="desc">横轴是一天 0–24 时。颜色代表不同话题类别，深浅是此刻的讨论热度。
         <b>白天</b>工作/通勤/社会新闻占据主导，<b>深夜</b>情感/娱乐/emo 浮上来。</div>
       <div id="rhythm-live"></div>
@@ -142,43 +143,26 @@
     </div>
   </div>
 
-  <!-- 杭州众包地图 -->
+  <!-- 杭州城市热力 -->
   <div class="view" id="view-hangzhou">
     <div class="map-box" id="hz-map"></div>
-    <div class="panel" id="hangzhou-controls">
-      <h3>📌 上报一个传感点</h3>
-      <div class="row">
-        <label>点击地图选取位置，或手动输入坐标</label>
-        <div class="coords" id="coords">未选取</div>
-      </div>
-      <div class="row">
-        <label>类型</label>
-        <select id="report-type">
-          <option value="noise">🔊 噪音</option>
-          <option value="air">🌫️ 空气</option>
-        </select>
-      </div>
-      <div class="row">
-        <label>强度 (0–100)</label>
-        <input id="report-value" type="number" min="0" max="100" value="60">
-      </div>
-      <div class="row">
-        <label>备注（可选）</label>
-        <input id="report-note" placeholder="如：湖滨步行街" maxlength="60">
-      </div>
-      <button class="btn" id="submit-report">提交上报</button>
+    <div class="panel" id="hz-controls" style="top:16px;left:16px;width:300px;">
+      <h3>🌆 杭州城市热力</h3>
       <div class="switch-row">
-        <button class="layer-tog active" id="tog-noise">🔊 噪音热力</button>
-        <button class="layer-tog active" id="tog-air">🌫️ 空气热力</button>
+        <button class="layer-tog active" data-layer="temp">🌡️ 温度</button>
+        <button class="layer-tog" data-layer="rain">🌧️ 降水</button>
+        <button class="layer-tog" data-layer="air">🌫️ 空气</button>
+        <button class="layer-tog" data-layer="density">🏢 繁华</button>
+        <button class="layer-tog" data-layer="events">📰 事件</button>
       </div>
-      <div class="hint" style="color:var(--muted);font-size:12px;margin-top:8px;">提交后写入 <code>data/hangzhou_reports.json</code>，刷新仍在。</div>
+      <div class="hint" style="color:var(--muted);font-size:12px;margin-top:8px;">实时天气/空气来自 Open-Meteo 公开接口。</div>
     </div>
-    <div class="legend">
-      <div style="font-weight:600;margin-bottom:6px;">图例</div>
-      <div class="row"><span class="swatch" style="background:#e63946"></span>噪音 · 越高越吵</div>
-      <div class="row"><span class="swatch" style="background:#1e6fd9"></span>空气 · 越高越差</div>
+    <div class="panel" id="hz-legend" style="right:16px;bottom:16px;">
+      <div id="legend-title" style="font-weight:600;margin-bottom:6px;">🌡️ 温度 (°C)</div>
+      <div class="grad-bar" id="hz-grad" style="width:180px;height:10px;border-radius:6px;margin:6px 0;"></div>
+      <div style="display:flex;justify-content:space-between;width:180px;"><span id="leg-low">凉</span><span id="leg-high">热</span></div>
     </div>
-    <div class="panel" id="map-status">载入中…</div>
+    <div class="panel" id="hz-status" style="bottom:16px;left:16px;font-size:12px;color:var(--muted);">载入中…</div>
   </div>
 </div>
 
@@ -254,8 +238,19 @@ function renderRhythm(data) {
   // 叠加昼夜背景 + 此刻竖线（用另一个 series 的 markArea）
   horizonChart(rhythmChart, cats, nowHour);
 
-  document.getElementById('rhythm-src').textContent =
-    data.source === 'weibo-live' ? '数据源：微博实时热搜（此刻）' : '数据源：演示样本 · 一天节奏';
+  const srcEl = document.getElementById('rhythm-src');
+  if (data.source === 'weibo-sampled' || data.source === 'weibo-live') {
+    const st = data.status || {};
+    const covered = st.coverage_hours ?? 0;
+    const pct = st.learning_pct ?? 0;
+    const progress = data.source === 'weibo-live'
+      ? '微博实时热搜（此刻）'
+      : `微博热搜采样累计 ${st.sample_count ?? 0} 次 · 覆盖 ${covered}/24 时段 · 已按真实数据学习 ${pct}%`;
+    srcEl.textContent = `数据源：${progress}`;
+    srcEl.title = '未被采样的时段暂用演示基线，持续点击“抓取此刻热搜”会越画越真实';
+  } else {
+    srcEl.textContent = '数据源：演示样本 · 一天节奏（未采集到热搜）';
+  }
   renderTags(document.getElementById('day-tags'), data.day);
   renderTags(document.getElementById('night-tags'), data.night);
   const live = data.live;
@@ -290,78 +285,194 @@ function horizonChart(chart, cats, nowHour) {
   });
 }
 
-// ---------- 杭州众包地图 ----------
+// ---------- 杭州城市热力 ----------
 const HZ_CENTER = [30.25, 120.16];
+const HZ_BBOX = { lat0: 30.00, lat1: 30.42, lng0: 120.00, lng1: 120.42 };
 let hzMap = null, hzInitialized = false;
-let selectedLat = null, selectedLng = null;
-let noiseHeat = null, airHeat = null, noiseLayer = null, airLayer = null;
-
-function noiseColor(v) { const t = v/100;
-  if (t < .33) return `rgb(255,${Math.round(200-40*t)},150)`;
-  if (t < .66) return `rgb(255,${Math.round(180-80*t)},60)`;
-  return `rgb(${Math.round(200+55*t)},60,60)`; }
-function airColor(v) { const t = v/100;
-  return `rgb(${Math.round(70*t)},${Math.round(110-60*t)},${Math.round(210-30*t)})`; }
+let hzPoints = [];      // [{lat,lng,temp,precip}]
+let hzHeat = null;
+let hzMarkers = null;
+let hzAqiLoaded = false;
+let hzDensity = null;   // {cells:[{lat,lng,value}]}
+let hzEvents = [];      // [{lat,lng,type,title,time}]
+let activeLayer = 'temp';
 
 async function initHangzhou() {
+  const lay = new URLSearchParams(location.search).get('layer');
+  if (['temp', 'rain', 'density', 'events'].includes(lay)) activeLayer = lay;
   hzMap = L.map('hz-map').setView(HZ_CENTER, 12);
   L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
     maxZoom: 19, attribution: '© OpenStreetMap' }).addTo(hzMap);
-  hzMap.on('click', e => {
-    selectedLat = e.latlng.lat; selectedLng = e.latlng.lng;
-    document.getElementById('coords').textContent = `已选：${selectedLat.toFixed(5)}, ${selectedLng.toFixed(5)}`;
-  });
-  await loadReports();
+  document.querySelectorAll('.layer-tog[data-layer]').forEach(b =>
+    b.addEventListener('click', () => { activeLayer = b.dataset.layer; renderHeat(); }));
+  document.querySelectorAll('.layer-tog[data-layer]').forEach(b =>
+    b.classList.toggle('active', b.dataset.layer === activeLayer));
+  await Promise.all([loadWeather(), loadUrban()]);
   hzInitialized = true;
 }
 
-async function loadReports() {
-  const res = await fetch('/api/hangzhou');
-  const reports = await res.json();
-  document.getElementById('map-status').textContent = `共 ${reports.length} 个上报点 · 点击地图选点上报`;
-  if (noiseHeat) hzMap.removeLayer(noiseHeat);
-  if (airHeat) hzMap.removeLayer(airHeat);
-  noiseHeat = L.heatLayer(reports.filter(r => r.type === 'noise').map(r => [r.lat, r.lng, r.value/100]),
-    { radius: 28, blur: 22, maxZoom: 14, gradient: {0.2:'#ffcc66',0.5:'#ff7a45',0.9:'#e63946'} });
-  airHeat = L.heatLayer(reports.filter(r => r.type === 'air').map(r => [r.lat, r.lng, r.value/100]),
-    { radius: 30, blur: 24, maxZoom: 14, gradient: {0.2:'#3ad29f',0.5:'#1e6fd9',0.9:'#19376d'} });
-  if (document.getElementById('tog-noise').classList.contains('active')) noiseHeat.addTo(hzMap);
-  if (document.getElementById('tog-air').classList.contains('active')) airHeat.addTo(hzMap);
-  if (noiseLayer) hzMap.removeLayer(noiseLayer);
-  if (airLayer) hzMap.removeLayer(airLayer);
-  noiseLayer = L.layerGroup(); airLayer = L.layerGroup();
-  reports.forEach(r => {
-    const color = r.type === 'noise' ? noiseColor(r.value) : airColor(r.value);
-    const marker = L.circleMarker([r.lat, r.lng], { radius: 6, color, fillColor: color,
-      fillOpacity: .85, weight: 1 }).bindTooltip(`<b>${r.type === 'noise' ? '噪音' : '空气'}</b> ${r.value}<br/>${r.note || ''}`, {direction:'top'});
-    (r.type === 'noise' ? noiseLayer : airLayer).addLayer(marker);
-  });
-  noiseLayer.addTo(hzMap); airLayer.addTo(hzMap);
+async function loadWeather() {
+  const step = 0.04;
+  const lats = [], lngs = [];
+  for (let la = HZ_BBOX.lat0; la <= HZ_BBOX.lat1 + 0.001; la += step) {
+    for (let ln = HZ_BBOX.lng0; ln <= HZ_BBOX.lng1 + 0.001; ln += step) {
+      lats.push(+la.toFixed(3)); lngs.push(+ln.toFixed(3));
+    }
+  }
+  const url = 'https://api.open-meteo.com/v1/forecast?latitude='
+    + lats.join(',') + '&longitude=' + lngs.join(',')
+    + '&current=temperature_2m,precipitation';
+  try {
+    const res = await fetch(url);
+    const data = await res.json();
+    hzPoints = (data || []).map(d => ({
+      lat: d.latitude, lng: d.longitude,
+      temp: d.current.temperature_2m, precip: d.current.precipitation,
+    }));
+    document.getElementById('hz-status').textContent =
+      `已加载 ${hzPoints.length} 个格点 · Open-Meteo`;
+    renderHeat();
+  } catch (e) {
+    document.getElementById('hz-status').textContent = '天气加载失败：' + e;
+  }
 }
 
-document.getElementById('tog-noise').addEventListener('click', function () {
-  this.classList.toggle('active');
-  if (noiseHeat && this.classList.contains('active')) noiseHeat.addTo(hzMap);
-  else if (noiseHeat) hzMap.removeLayer(noiseHeat);
-});
-document.getElementById('tog-air').addEventListener('click', function () {
-  this.classList.toggle('active');
-  if (airHeat && this.classList.contains('active')) airHeat.addTo(hzMap);
-  else if (airHeat) hzMap.removeLayer(airHeat);
-});
-
-async function submitReport() {
-  if (selectedLat == null) { alert('请先在地图上点击选取位置'); return; }
-  const type = document.getElementById('report-type').value;
-  const value = parseInt(document.getElementById('report-value').value, 10) || 50;
-  const note = document.getElementById('report-note').value;
-  const res = await fetch('/api/report', { method: 'POST', headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ lat: selectedLat, lng: selectedLng, type, value, note }) });
-  const out = await res.json();
-  if (out.ok) { alert('已上报！当前共 ' + out.total + ' 个点'); await loadReports(); }
-  else alert('上报失败：' + (out.error || '未知'));
+function buildGrid() {
+  const step = 0.04, lats = [], lngs = [];
+  for (let la = HZ_BBOX.lat0; la <= HZ_BBOX.lat1 + 0.001; la += step) {
+    for (let ln = HZ_BBOX.lng0; ln <= HZ_BBOX.lng1 + 0.001; ln += step) {
+      lats.push(+la.toFixed(3)); lngs.push(+ln.toFixed(3));
+    }
+  }
+  return { lats, lngs };
 }
-document.getElementById('submit-report').addEventListener('click', submitReport);
+
+async function loadAirQuality() {
+  const { lats, lngs } = buildGrid();
+  const url = 'https://air-quality-api.open-meteo.com/v1/air-quality?latitude='
+    + lats.join(',') + '&longitude=' + lngs.join(',')
+    + '&current=european_aqi,pm2_5';
+  const res = await fetch(url);
+  const data = await res.json();
+  const list = data || [];
+  if (!hzPoints.length) {
+    hzPoints = list.map(d => ({ lat: d.latitude, lng: d.longitude, aqi: d.current.european_aqi, pm25: d.current.pm2_5 }));
+  } else {
+    list.forEach((d, i) => {
+      if (hzPoints[i]) {
+        hzPoints[i].aqi = d.current.european_aqi;
+        hzPoints[i].pm25 = d.current.pm2_5;
+      }
+    });
+  }
+  hzAqiLoaded = true;
+}
+
+function lerpColor(a, b, t) {
+  return `rgb(${Math.round(a[0]+(b[0]-a[0])*t)},${Math.round(a[1]+(b[1]-a[1])*t)},${Math.round(a[2]+(b[2]-a[2])*t)})`;
+}
+function tempColor(v, min, max) {
+  const t = (v - min) / (max - min || 1);
+  const stops = [[30,144,255],[58,210,159],[255,209,102],[255,122,69],[230,57,70]];
+  const p = t * (stops.length - 1), i = Math.floor(p), f = p - i;
+  return i >= stops.length - 1 ? lerpColor(stops[stops.length-1], stops[stops.length-1], 0) : lerpColor(stops[i], stops[i+1], f);
+}
+function rainColor(v, max) {
+  const t = max > 0 ? v / max : 0;
+  const stops = [[209,227,255],[74,163,255],[30,111,217],[11,47,107]];
+  const p = t * (stops.length - 1), i = Math.floor(p), f = p - i;
+  return i >= stops.length - 1 ? lerpColor(stops[stops.length-1], stops[stops.length-1], 0) : lerpColor(stops[i], stops[i+1], f);
+}
+
+async function loadUrban() {
+  try { hzDensity = await (await fetch('/hz_density.json')).json(); }
+  catch (e) { console.error('density', e); }
+  try { hzEvents = await (await fetch('/events.json')).json(); }
+  catch (e) { console.error('events', e); }
+}
+
+async function renderHeat() {
+  if (hzHeat) hzMap.removeLayer(hzHeat);
+  if (hzMarkers) hzMap.removeLayer(hzMarkers);
+  let pts = [], grad;
+  const title = document.getElementById('legend-title');
+  const low = document.getElementById('leg-low');
+  const high = document.getElementById('leg-high');
+  const bar = document.getElementById('hz-grad');
+  const status = document.getElementById('hz-status');
+
+  if (activeLayer === 'temp' || activeLayer === 'rain') {
+    const key = activeLayer === 'temp' ? 'temp' : 'precip';
+    const vals = hzPoints.map(p => p[key]);
+    const min = vals.length ? Math.min(...vals) : 0;
+    const max = vals.length ? Math.max(...vals) : 1;
+    const range = (max - min) || 1;
+    grad = activeLayer === 'temp'
+      ? { 0.0: '#3b82f6', 0.25: '#22c55e', 0.5: '#eab308', 0.75: '#f97316', 1.0: '#dc2626' }
+      : { 0.0: '#bfe3ff', 0.4: '#4aa3ff', 0.7: '#1e6fd9', 1.0: '#0b2f6b' };
+    pts = hzPoints.map(p => [p.lat, p.lng, (p[key] - min) / range]);
+    if (activeLayer === 'temp') {
+      title.textContent = '🌡️ 温度 (°C)';
+      low.textContent = `凉 ${min.toFixed(1)}°`; high.textContent = `热 ${max.toFixed(1)}°`;
+      bar.style.background = 'linear-gradient(90deg,#3b82f6,#22c55e,#eab308,#f97316,#dc2626)';
+      status.textContent = `已加载 ${hzPoints.length} 个格点 · 实时温度`;
+    } else {
+      title.textContent = '🌧️ 降水 (mm)';
+      low.textContent = max <= 0.01 ? '无雨' : '小雨'; high.textContent = max.toFixed(2) + ' mm';
+      bar.style.background = 'linear-gradient(90deg,#bfe3ff,#4aa3ff,#1e6fd9,#0b2f6b)';
+      status.textContent = max <= 0.01 ? '当前杭州无降水' : `已加载 ${hzPoints.length} 个格点 · 实时降水`;
+    }
+  } else if (activeLayer === 'air') {
+    if (!hzAqiLoaded) {
+      status.textContent = '正在加载实时空气 (AQI)…';
+      try {
+        await loadAirQuality();
+      } catch (e) {
+        status.textContent = '空气加载失败：' + e;
+        hzAqiLoaded = false;
+        return;
+      }
+    }
+    const aqi = hzPoints.map(p => p.aqi).filter(v => v != null);
+    const min = aqi.length ? Math.min(...aqi) : 0;
+    const max = aqi.length ? Math.max(...aqi) : 1;
+    const range = (max - min) || 1;
+    grad = { 0.0: '#22c55e', 0.25: '#eab308', 0.5: '#f97316', 0.75: '#dc2626', 1.0: '#a855f7' };
+    pts = hzPoints.filter(p => p.aqi != null).map(p => [p.lat, p.lng, (p.aqi - min) / range]);
+    title.textContent = '🌫️ 空气 (European AQI)';
+    low.textContent = `优 ${min}`;
+    high.textContent = `差 ${max}`;
+    bar.style.background = 'linear-gradient(90deg,#22c55e,#eab308,#f97316,#dc2626,#a855f7)';
+    status.textContent = `已加载 ${pts.length} 个格点 · 实时空气 (Open-Meteo)`;
+  } else if (activeLayer === 'density') {
+    if (!hzDensity) { status.textContent = '繁华数据加载中…'; return; }
+    const cells = hzDensity.cells, max = cells[0] ? cells[0].value : 1;
+    grad = { 0.0: '#3b82f6', 0.25: '#22c55e', 0.5: '#eab308', 0.75: '#f97316', 1.0: '#dc2626' };
+    pts = cells.map(c => [c.lat, c.lng, c.value / max]);
+    title.textContent = '🏢 繁华程度'; low.textContent = '低'; high.textContent = '高';
+    bar.style.background = 'linear-gradient(90deg,#3b82f6,#22c55e,#eab308,#f97316,#dc2626)';
+    status.textContent = `繁华度 · ${cells.length} 网格（${hzDensity.meta.source === 'demo' ? '演示数据' : '真实 POI'}）`;
+  } else if (activeLayer === 'events') {
+    if (!hzEvents.length) { status.textContent = '事件数据加载中…'; return; }
+    grad = { 0.0: '#22c55e', 0.5: '#eab308', 1.0: '#dc2626' };
+    pts = hzEvents.map(e => [e.lat, e.lng, 1]);
+    title.textContent = '📰 新闻 / 事件'; low.textContent = '少'; high.textContent = '多';
+    bar.style.background = 'linear-gradient(90deg,#22c55e,#eab308,#dc2626)';
+    status.textContent = `共 ${hzEvents.length} 条事件 · 点击红点看详情`;
+  }
+
+  hzHeat = L.heatLayer(pts, { radius: 55, blur: 30, maxZoom: 15, gradient: grad });
+  hzHeat.addTo(hzMap);
+  if (activeLayer === 'events') {
+    hzMarkers = L.layerGroup();
+    hzEvents.forEach(e => {
+      L.circleMarker([e.lat, e.lng], {
+        radius: 7, color: '#fff', weight: 1, fillColor: '#dc2626', fillOpacity: .92,
+      }).bindPopup(`<b>${e.type}</b> · ${e.title}<br/>${e.time}`).addTo(hzMarkers);
+    });
+    hzMarkers.addTo(hzMap);
+  }
+}
 
 // 窗口尺寸变化时重算图表（适配手机/桌面切换）
 let resizeTimer;
@@ -372,6 +483,31 @@ window.addEventListener('resize', () => {
     if (hzMap) hzMap.invalidateSize();
   }, 300);
 });
+
+// ---------- 自动采样（打开页面时每 15 分钟静默抓一次热搜） ----------
+const AUTO_SAMPLE_MIN = 15;
+let lastAutoSample = null;
+
+function updateAutoBadge() {
+  const el = document.getElementById('auto-sample');
+  if (!el) return;
+  el.textContent = lastAutoSample
+    ? `自动采样每 ${AUTO_SAMPLE_MIN} 分钟 · 上次 ${lastAutoSample.toTimeString().slice(0, 5)}`
+    : `自动采样每 ${AUTO_SAMPLE_MIN} 分钟`;
+}
+
+async function autoSample() {
+  try {
+    const res = await fetch('/api/rhythm?live=1');
+    const data = await res.json();
+    lastAutoSample = new Date();
+    if (rhythmChart) renderRhythm(data);
+    else document.getElementById('rhythm-src').textContent =
+      data.source === 'weibo-sampled' || data.source === 'weibo-live'
+        ? '数据源：微博实时热搜（自动采样）' : '数据源：演示样本';
+  } catch (e) { /* 静默失败，下轮再试 */ }
+  updateAutoBadge();
+}
 
 // ---------- 初始化 ----------
 window.addEventListener('load', () => {
@@ -385,6 +521,8 @@ window.addEventListener('load', () => {
   if ('serviceWorker' in navigator) {
     navigator.serviceWorker.register('/sw.js').catch(() => {});
   }
+  updateAutoBadge();
+  setInterval(autoSample, AUTO_SAMPLE_MIN * 60 * 1000);
 });
 document.getElementById('live-btn').addEventListener('click', () => loadRhythm(true));
 </script>
