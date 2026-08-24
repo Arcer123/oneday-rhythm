@@ -1,0 +1,392 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>一天话题节奏 · 杭州众包地图</title>
+<link rel="stylesheet" href="vendor/leaflet.css">
+<link rel="manifest" href="/manifest.json">
+<link rel="apple-touch-icon" href="/apple-touch-icon.png">
+<meta name="theme-color" content="#0d1117">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="话题节奏">
+<style>
+  :root {
+    --bg: #0d1117; --panel: #161b22; --line: #30363d;
+    --text: #e6edf3; --muted: #8b949e; --accent: #58a6ff;
+  }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; height: 100%; background: var(--bg); color: var(--text);
+    font-family: -apple-system, "PingFang SC", "Microsoft YaHei", sans-serif; }
+  .topbar { display: flex; align-items: center; gap: 18px; padding: 14px 22px;
+    border-bottom: 1px solid var(--line); background: var(--panel); flex-wrap: wrap; }
+  .brand { font-weight: 700; font-size: 16px; letter-spacing: .5px; }
+  .tabs { display: flex; gap: 8px; }
+  .tab { padding: 8px 16px; border-radius: 8px; cursor: pointer; background: transparent;
+    border: 1px solid var(--line); color: var(--muted); transition: .15s; }
+  .tab.active { background: var(--accent); color: #fff; border-color: var(--accent); }
+  .tab:hover:not(.active) { color: var(--text); border-color: var(--muted); }
+  .live-btn { margin-left: auto; padding: 8px 14px; border-radius: 8px; border: 1px solid var(--line);
+    background: transparent; color: var(--muted); cursor: pointer; font-size: 13px; }
+  .live-btn:hover { color: var(--text); border-color: var(--muted); }
+  .main { height: calc(100% - 59px); position: relative; overflow: hidden; }
+  .view { height: 100%; display: none; }
+  .view.active { display: block; }
+  .map-box { position: absolute; inset: 0; }
+  .panel { position: absolute; z-index: 500; background: rgba(22,27,34,.92);
+    border: 1px solid var(--line); border-radius: 12px; padding: 14px; font-size: 13px;
+    backdrop-filter: blur(6px); }
+  .panel h3 { margin: 0 0 6px; font-size: 14px; }
+  .src { color: var(--muted); font-size: 12px; }
+
+  /* rhythm 页面布局 */
+  #rhythm-view { position: relative; flex-direction: column; }
+  #rhythm-view.active { display: flex; }
+  #rhythm-chart { flex: 1 1 auto; min-height: 0; position: relative; }
+  #rhythm-info { top: 16px; left: 16px; max-width: 300px; }
+  #rhythm-info .desc { color: var(--muted); font-size: 12px; line-height: 1.6; margin-top: 6px; }
+  #rhythm-live { margin-top: 12px; font-size: 12px; color: var(--muted); max-height: 150px; overflow: auto; }
+  .mood-pills { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 10px; }
+  .pill { font-size: 11px; padding: 2px 9px; border-radius: 20px; color: #fff; flex: none; }
+  .mood-正面,.mood-愉悦,.mood-亢奋 { background: #2ea043; }
+  .mood-负面,.mood-焦虑,.mood-烦躁,.mood-伤感,.mood-低落 { background: #e63946; }
+  .mood-中性 { background: #6e7681; }
+  #band-panel { position: absolute; z-index: 500; top: 16px; right: 16px; width: 260px; }
+  #band-panel .band { display: flex; align-items: center; gap: 8px; margin-bottom: 6px; font-size: 12px; }
+  .swatch { width: 14px; height: 14px; border-radius: 4px; display: inline-block; }
+  #topic-cards { position: relative; z-index: 500; display: flex; gap: 14px;
+    padding: 0 16px 14px; }
+  .topic-card { flex: 1; background: rgba(22,27,34,.92); border: 1px solid var(--line);
+    border-radius: 12px; padding: 14px 16px; backdrop-filter: blur(6px); }
+  .topic-card h4 { margin: 0 0 10px; font-size: 14px; display: flex; align-items: center; gap: 8px; }
+  .topic-card .day-icon { font-size: 18px; }
+  .topic-tags { display: flex; flex-wrap: wrap; gap: 8px; }
+  .tag { display: flex; align-items: center; gap: 6px; padding: 5px 10px; border-radius: 8px;
+    background: rgba(255,255,255,.04); border: 1px solid var(--line); font-size: 13px; }
+  .tag .mini { font-size: 11px; padding: 1px 7px; border-radius: 20px; color: #fff; }
+
+  /* hangzhou 页面 */
+  #hangzhou-controls { top: 16px; left: 16px; width: 260px; }
+  .row { margin-bottom: 10px; }
+  .row label { display: block; margin-bottom: 4px; color: var(--muted); font-size: 12px; }
+  input, select { width: 100%; padding: 7px 9px; border-radius: 8px; border: 1px solid var(--line);
+    background: var(--bg); color: var(--text); font-size: 13px; outline: none; }
+  input:focus, select:focus { border-color: var(--accent); }
+  .btn { width: 100%; padding: 9px; border-radius: 8px; border: none; background: var(--accent);
+    color: #fff; font-size: 14px; cursor: pointer; font-weight: 600; }
+  .btn:hover { opacity: .9; }
+  .switch-row { display: flex; gap: 8px; margin: 10px 0; }
+  .layer-tog { padding: 7px 9px; border: 1px solid var(--line); border-radius: 8px; background: var(--bg);
+    color: var(--muted); cursor: pointer; font-size: 12px; flex: 1; }
+  .layer-tog.active { color: var(--text); border-color: var(--accent); }
+  .coords { color: var(--accent); font-weight: 600; }
+  #map-status { bottom: 16px; left: 16px; font-size: 12px; color: var(--muted); }
+  .legend { position: absolute; z-index: 500; right: 16px; bottom: 16px; background: rgba(22,27,34,.9);
+    border: 1px solid var(--line); border-radius: 12px; padding: 12px 14px; font-size: 12px; }
+  .legend .row { display: flex; align-items: center; gap: 8px; margin-bottom: 6px; }
+
+  /* 手机端 PWA 适配 */
+  @media (max-width: 700px) {
+    .topbar { gap: 10px; padding: 10px 12px; }
+    .brand { font-size: 14px; }
+    .tab { padding: 7px 12px; font-size: 13px; }
+    .live-btn { margin-left: 0; width: 100%; order: 3; text-align: center; }
+    #rhythm-info { position: relative; top: auto; left: auto; width: 100%; max-width: none;
+      margin: 0; border-radius: 0; border-left: 0; border-right: 0; border-top: 0; order: -1; }
+    #band-panel { display: none; }
+    #topic-cards { flex-direction: column; padding: 0 10px 10px; }
+    #rhythm-chart { min-height: 200px; max-height: 56vh; }
+    #hangzhou-controls { top: 10px; left: 10px; right: 10px; width: auto; }
+    .legend { display: none; }
+  }
+</style>
+</head>
+<body>
+<div class="topbar">
+  <div class="brand">🌗 一天话题节奏</div>
+  <div class="tabs">
+    <div class="tab active" data-view="rhythm">一天话题节奏</div>
+    <div class="tab" data-view="hangzhou">杭州噪音/空气地图</div>
+  </div>
+  <button class="live-btn" id="live-btn">⚡ 抓取此刻热搜</button>
+</div>
+
+<div class="main">
+  <!-- 一天话题节奏 -->
+  <div class="view active" id="rhythm-view">
+    <div id="rhythm-chart"></div>
+    <div class="panel" id="rhythm-info">
+      <h3>🌗 大家的一天在聊什么</h3>
+      <div class="src" id="rhythm-src">数据源：演示样本</div>
+      <div class="desc">横轴是一天 0–24 时。颜色代表不同话题类别，深浅是此刻的讨论热度。
+        <b>白天</b>工作/通勤/社会新闻占据主导，<b>深夜</b>情感/娱乐/emo 浮上来。</div>
+      <div id="rhythm-live"></div>
+      <div class="mood-pills" id="rhythm-mood"></div>
+    </div>
+    <div class="panel" id="band-panel">
+      <div style="font-weight:600;margin-bottom:8px;">时段标记</div>
+      <div class="band"><span class="swatch" style="background:#ffd166"></span>白天 · 焦虑 / 忙碌</div>
+      <div class="band"><span class="swatch" style="background:#1e6fd9"></span>深夜 · 情感 / 放松</div>
+      <div class="band"><span class="swatch" style="background:#ff7a45"></span>你现在此刻</div>
+    </div>
+    <div id="topic-cards">
+      <div class="topic-card">
+        <h4><span class="day-icon">☀️</span>白天（8–20）大家在焦虑 / 关注</h4>
+        <div class="topic-tags" id="day-tags"></div>
+      </div>
+      <div class="topic-card">
+        <h4><span class="day-icon">🌙</span>深夜（22–02）大家在聊</h4>
+        <div class="topic-tags" id="night-tags"></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- 杭州众包地图 -->
+  <div class="view" id="view-hangzhou">
+    <div class="map-box" id="hz-map"></div>
+    <div class="panel" id="hangzhou-controls">
+      <h3>📌 上报一个传感点</h3>
+      <div class="row">
+        <label>点击地图选取位置，或手动输入坐标</label>
+        <div class="coords" id="coords">未选取</div>
+      </div>
+      <div class="row">
+        <label>类型</label>
+        <select id="report-type">
+          <option value="noise">🔊 噪音</option>
+          <option value="air">🌫️ 空气</option>
+        </select>
+      </div>
+      <div class="row">
+        <label>强度 (0–100)</label>
+        <input id="report-value" type="number" min="0" max="100" value="60">
+      </div>
+      <div class="row">
+        <label>备注（可选）</label>
+        <input id="report-note" placeholder="如：湖滨步行街" maxlength="60">
+      </div>
+      <button class="btn" id="submit-report">提交上报</button>
+      <div class="switch-row">
+        <button class="layer-tog active" id="tog-noise">🔊 噪音热力</button>
+        <button class="layer-tog active" id="tog-air">🌫️ 空气热力</button>
+      </div>
+      <div class="hint" style="color:var(--muted);font-size:12px;margin-top:8px;">提交后写入 <code>data/hangzhou_reports.json</code>，刷新仍在。</div>
+    </div>
+    <div class="legend">
+      <div style="font-weight:600;margin-bottom:6px;">图例</div>
+      <div class="row"><span class="swatch" style="background:#e63946"></span>噪音 · 越高越吵</div>
+      <div class="row"><span class="swatch" style="background:#1e6fd9"></span>空气 · 越高越差</div>
+    </div>
+    <div class="panel" id="map-status">载入中…</div>
+  </div>
+</div>
+
+<script src="vendor/echarts.min.js"></script>
+<script src="vendor/leaflet.js"></script>
+<script src="vendor/leaflet-heat.js"></script>
+<script>
+// ---------- 页面切换 ----------
+const tabs = document.querySelectorAll('.tab');
+const views = document.querySelectorAll('.view');
+tabs.forEach(t => t.addEventListener('click', () => {
+  tabs.forEach(x => x.classList.toggle('active', x === t));
+  views.forEach(v => v.classList.toggle('active', v.id === 'view-' + t.dataset.view));
+  if (t.dataset.view === 'hangzhou' && !hzInitialized) initHangzhou();
+  if (t.dataset.view === 'rhythm' && rhythmChart) rhythmChart.resize();
+}));
+
+// ---------- 一天话题节奏 ----------
+let rhythmChart = null, rhythmDone = false, lastRhythm = null;
+
+function renderTags(el, topics) {
+  el.innerHTML = topics.map(t => `<span class="tag">${t.word}<span class="mini mood-${t.mood}">${t.mood}</span></span>`).join('');
+}
+
+async function loadRhythm(live) {
+  const btn = document.getElementById('live-btn');
+  if (live) { btn.textContent = '⏳ 抓取中…'; btn.disabled = true; }
+  try {
+    const res = await fetch('/api/rhythm' + (live ? '?live=1' : ''));
+    const data = await res.json();
+    renderRhythm(data);
+  } catch (e) {
+    console.error(e);
+    document.getElementById('rhythm-src').textContent = '数据源：加载失败';
+  } finally {
+    btn.textContent = '⚡ 抓取此刻热搜'; btn.disabled = false;
+  }
+}
+
+function renderRhythm(data) {
+  if (!rhythmChart) {
+    rhythmChart = echarts.init(document.getElementById('rhythm-chart'));
+  }
+  lastRhythm = data;
+  const isMobile = window.innerWidth < 700;
+  const cats = data.categories;
+  const nowHour = data.now_hour;
+  const hours = Array.from({length: 24}, (_, i) => i + ':00');
+  const heatData = [];
+  cats.forEach((c, ci) => c.hourly.forEach((v, h) => {
+    if (v > 0) heatData.push([h, ci, v]);
+  }));
+  const maxVal = Math.max(...cats.flatMap(c => c.hourly));
+  rhythmChart.setOption({
+    backgroundColor: 'transparent',
+    grid: { left: isMobile ? 82 : 120, right: isMobile ? 26 : 82,
+      top: isMobile ? 40 : 196, bottom: 40 },
+    tooltip: { position: 'top', backgroundColor: 'rgba(22,27,34,.95)', borderColor: '#30363d',
+      textStyle: { color: '#e6edf3' },
+      formatter: p => `<b>${p.value[1] != null ? cats[p.value[1]].name : ''}</b><br/>${hours[p.value[0]]} · 热度 ${p.value[2]}` },
+    xAxis: { type: 'category', data: hours, splitArea: { show: false },
+      axisLine: { lineStyle: { color: '#30363d' } }, axisLabel: { color: '#8b949e', interval: 1 } },
+    yAxis: { type: 'category', data: cats.map(c => c.name),
+      axisLine: { lineStyle: { color: '#30363d' } },
+      axisLabel: { color: '#e6edf3', fontSize: isMobile ? 11 : 14 } },
+    visualMap: { min: 0, max: maxVal, calculable: false, orient: 'vertical', right: 8,
+      top: 'center', itemWidth: 10, itemHeight: 100,
+      textStyle: { color: '#8b949e' },
+      inRange: { color: ['#21262d', '#1e90ff', '#3ad29f', '#ffd166', '#ff7a45', '#e63946'] } },
+    series: [{ type: 'heatmap', data: heatData, label: { show: false },
+      emphasis: { itemStyle: { borderColor: '#fff', borderWidth: 1 } } }],
+  });
+  // 叠加昼夜背景 + 此刻竖线（用另一个 series 的 markArea）
+  horizonChart(rhythmChart, cats, nowHour);
+
+  document.getElementById('rhythm-src').textContent =
+    data.source === 'weibo-live' ? '数据源：微博实时热搜（此刻）' : '数据源：演示样本 · 一天节奏';
+  renderTags(document.getElementById('day-tags'), data.day);
+  renderTags(document.getElementById('night-tags'), data.night);
+  const live = data.live;
+  const liveEl = document.getElementById('rhythm-live');
+  const moodEl = document.getElementById('rhythm-mood');
+  if (live && live.topics && live.topics.length) {
+    liveEl.innerHTML = `<div style="margin-bottom:6px;">此刻热搜 · 主导情绪：<b>${live.mood}</b></div>` +
+      live.topics.slice(0, 5).map(t => `<div>· ${t.word}</div>`).join('');
+    moodEl.innerHTML = '';
+  } else {
+    liveEl.innerHTML = '<div>点击右上角「抓取此刻热搜」，把当前真实话题画到时间轴上。</div>';
+  }
+}
+
+function horizonChart(chart, cats, nowHour) {
+  // 昼夜背景色带用 heatmap 同一 series 的 markArea 实现
+  const bandData = [[
+    { xAxis: '7:00', itemStyle: { color: 'rgba(255,209,102,.10)' } },
+    { xAxis: '20:00', itemStyle: { color: 'rgba(255,209,102,.10)' } }
+  ], [
+    { xAxis: '22:00', itemStyle: { color: 'rgba(30,111,217,.12)' } },
+    { xAxis: '0:00', itemStyle: { color: 'rgba(30,111,217,.12)' } }
+  ]];
+  chart.setOption({
+    series: [{
+      type: 'heatmap',
+      markArea: { silent: true, data: bandData },
+      markLine: { silent: true, symbol: 'none',
+        data: [{ xAxis: nowHour + ':00', lineStyle: { color: '#ff7a45', width: 2 },
+          label: { formatter: '此刻', color: '#ff7a45', position: 'insideEndTop' } }] }
+    }]
+  });
+}
+
+// ---------- 杭州众包地图 ----------
+const HZ_CENTER = [30.25, 120.16];
+let hzMap = null, hzInitialized = false;
+let selectedLat = null, selectedLng = null;
+let noiseHeat = null, airHeat = null, noiseLayer = null, airLayer = null;
+
+function noiseColor(v) { const t = v/100;
+  if (t < .33) return `rgb(255,${Math.round(200-40*t)},150)`;
+  if (t < .66) return `rgb(255,${Math.round(180-80*t)},60)`;
+  return `rgb(${Math.round(200+55*t)},60,60)`; }
+function airColor(v) { const t = v/100;
+  return `rgb(${Math.round(70*t)},${Math.round(110-60*t)},${Math.round(210-30*t)})`; }
+
+async function initHangzhou() {
+  hzMap = L.map('hz-map').setView(HZ_CENTER, 12);
+  L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+    maxZoom: 19, attribution: '© OpenStreetMap' }).addTo(hzMap);
+  hzMap.on('click', e => {
+    selectedLat = e.latlng.lat; selectedLng = e.latlng.lng;
+    document.getElementById('coords').textContent = `已选：${selectedLat.toFixed(5)}, ${selectedLng.toFixed(5)}`;
+  });
+  await loadReports();
+  hzInitialized = true;
+}
+
+async function loadReports() {
+  const res = await fetch('/api/hangzhou');
+  const reports = await res.json();
+  document.getElementById('map-status').textContent = `共 ${reports.length} 个上报点 · 点击地图选点上报`;
+  if (noiseHeat) hzMap.removeLayer(noiseHeat);
+  if (airHeat) hzMap.removeLayer(airHeat);
+  noiseHeat = L.heatLayer(reports.filter(r => r.type === 'noise').map(r => [r.lat, r.lng, r.value/100]),
+    { radius: 28, blur: 22, maxZoom: 14, gradient: {0.2:'#ffcc66',0.5:'#ff7a45',0.9:'#e63946'} });
+  airHeat = L.heatLayer(reports.filter(r => r.type === 'air').map(r => [r.lat, r.lng, r.value/100]),
+    { radius: 30, blur: 24, maxZoom: 14, gradient: {0.2:'#3ad29f',0.5:'#1e6fd9',0.9:'#19376d'} });
+  if (document.getElementById('tog-noise').classList.contains('active')) noiseHeat.addTo(hzMap);
+  if (document.getElementById('tog-air').classList.contains('active')) airHeat.addTo(hzMap);
+  if (noiseLayer) hzMap.removeLayer(noiseLayer);
+  if (airLayer) hzMap.removeLayer(airLayer);
+  noiseLayer = L.layerGroup(); airLayer = L.layerGroup();
+  reports.forEach(r => {
+    const color = r.type === 'noise' ? noiseColor(r.value) : airColor(r.value);
+    const marker = L.circleMarker([r.lat, r.lng], { radius: 6, color, fillColor: color,
+      fillOpacity: .85, weight: 1 }).bindTooltip(`<b>${r.type === 'noise' ? '噪音' : '空气'}</b> ${r.value}<br/>${r.note || ''}`, {direction:'top'});
+    (r.type === 'noise' ? noiseLayer : airLayer).addLayer(marker);
+  });
+  noiseLayer.addTo(hzMap); airLayer.addTo(hzMap);
+}
+
+document.getElementById('tog-noise').addEventListener('click', function () {
+  this.classList.toggle('active');
+  if (noiseHeat && this.classList.contains('active')) noiseHeat.addTo(hzMap);
+  else if (noiseHeat) hzMap.removeLayer(noiseHeat);
+});
+document.getElementById('tog-air').addEventListener('click', function () {
+  this.classList.toggle('active');
+  if (airHeat && this.classList.contains('active')) airHeat.addTo(hzMap);
+  else if (airHeat) hzMap.removeLayer(airHeat);
+});
+
+async function submitReport() {
+  if (selectedLat == null) { alert('请先在地图上点击选取位置'); return; }
+  const type = document.getElementById('report-type').value;
+  const value = parseInt(document.getElementById('report-value').value, 10) || 50;
+  const note = document.getElementById('report-note').value;
+  const res = await fetch('/api/report', { method: 'POST', headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ lat: selectedLat, lng: selectedLng, type, value, note }) });
+  const out = await res.json();
+  if (out.ok) { alert('已上报！当前共 ' + out.total + ' 个点'); await loadReports(); }
+  else alert('上报失败：' + (out.error || '未知'));
+}
+document.getElementById('submit-report').addEventListener('click', submitReport);
+
+// 窗口尺寸变化时重算图表（适配手机/桌面切换）
+let resizeTimer;
+window.addEventListener('resize', () => {
+  clearTimeout(resizeTimer);
+  resizeTimer = setTimeout(() => {
+    if (rhythmChart && lastRhythm) renderRhythm(lastRhythm);
+    if (hzMap) hzMap.invalidateSize();
+  }, 300);
+});
+
+// ---------- 初始化 ----------
+window.addEventListener('load', () => {
+  loadRhythm(false);
+  const params = new URLSearchParams(location.search);
+  if (params.get('view') === 'hangzhou') {
+    const tab = document.querySelector('.tab[data-view="hangzhou"]');
+    if (tab) tab.click();
+  }
+  if (['1', 'true'].includes(params.get('live'))) loadRhythm(true);
+  if ('serviceWorker' in navigator) {
+    navigator.serviceWorker.register('/sw.js').catch(() => {});
+  }
+});
+document.getElementById('live-btn').addEventListener('click', () => loadRhythm(true));
+</script>
+</body>
+</html>
