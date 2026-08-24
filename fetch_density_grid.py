@@ -12,7 +12,11 @@ import urllib.parse
 import urllib.request
 import urllib.error
 
-OVERPASS = "http://overpass-api.de/api/interpreter"
+OVERPASS_ENDPOINTS = [
+    "https://lz4.overpass-api.de/api/interpreter",
+    "https://overpass-api.de/api/interpreter",
+    "https://overpass.kumi.systems/api/interpreter",
+]
 OUT = "/Users/admin/Documents/ChatGPT/New project/social-heatmap/hz_density.json"
 
 LAT0, LAT1, LNG0, LNG1 = 30.00, 30.42, 120.00, 120.42
@@ -28,15 +32,24 @@ def fetch(cell):
          f'node["amenity"~"^({AMENITY})$"]({lat0},{lng0},{lat1},{lng1});out;'
          f'node["shop"~"^({SHOP})$"]({lat0},{lng0},{lat1},{lng1});out;')
     data = "data=" + urllib.parse.quote(q)
-    req = urllib.request.Request(
-        OVERPASS, data=data.encode("utf-8"),
-        headers={"Content-Type": "application/x-www-form-urlencoded; charset=UTF-8",
-                 "User-Agent": "city-pulse-map/1.0"},
-    )
-    with urllib.request.urlopen(req, timeout=70) as resp:
-        payload = json.loads(resp.read().decode("utf-8"))
-    return [(e.get("lat"), e.get("lon")) for e in payload.get("elements", [])
-            if e.get("lat") is not None]
+    last = None
+    for ep in OVERPASS_ENDPOINTS:
+        try:
+            req = urllib.request.Request(
+                ep, data=data.encode("utf-8"),
+                headers={"Content-Type": "application/x-www-form-urlencoded; charset=UTF-8",
+                         "User-Agent": "city-pulse-map/1.0"},
+            )
+            with urllib.request.urlopen(req, timeout=70) as resp:
+                payload = json.loads(resp.read().decode("utf-8"))
+            return [(e.get("lat"), e.get("lon")) for e in payload.get("elements", [])
+                    if e.get("lat") is not None]
+        except Exception as e:
+            last = e
+            print(f"  · {ep} 失败({type(e).__name__})")
+    if last:
+        raise last
+    return []
 
 
 def cells():

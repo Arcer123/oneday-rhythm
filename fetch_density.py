@@ -14,9 +14,14 @@ import urllib.error
 
 
 BBOX = "(30.00,120.00,30.42,120.42)"
-OVERPASS = "http://overpass-api.de/api/interpreter"
+OVERPASS_ENDPOINTS = [
+    "https://lz4.overpass-api.de/api/interpreter",
+    "https://overpass-api.de/api/interpreter",
+    "https://overpass.kumi.systems/api/interpreter",
+]
 OUT = "/Users/admin/Documents/ChatGPT/New project/social-heatmap/hz_density.json"
 STEP = 0.02
+MIN_POIS = 300          # 低于此数量视为抓取失败，不覆盖现有数据
 
 # 单条无 union 的正则查询（public Overpass 更能接受这种写法）
 QUERIES = [
@@ -31,14 +36,23 @@ QUERIES = [
 
 def fetch_one(q):
     data = "data=" + urllib.parse.quote(q)
-    req = urllib.request.Request(
-        OVERPASS, data=data.encode("utf-8"),
-        headers={"Content-Type": "application/x-www-form-urlencoded; charset=UTF-8",
-                 "User-Agent": "city-pulse-map/1.0 (personal project)"},
-    )
-    with urllib.request.urlopen(req, timeout=120) as resp:
-        payload = json.loads(resp.read().decode("utf-8"))
-    return payload.get("elements", [])
+    last = None
+    for ep in OVERPASS_ENDPOINTS:
+        req = urllib.request.Request(
+            ep, data=data.encode("utf-8"),
+            headers={"Content-Type": "application/x-www-form-urlencoded; charset=UTF-8",
+                     "User-Agent": "city-pulse-map/1.0 (personal project)"},
+        )
+        try:
+            with urllib.request.urlopen(req, timeout=120) as resp:
+                payload = json.loads(resp.read().decode("utf-8"))
+            return payload.get("elements", [])
+        except Exception as e:
+            last = e
+            print(f"  · {ep} 失败({type(e).__name__})")
+    if last:
+        raise last
+    return []
 
 
 # ---------- 高德 / 百度 POI（中文本地 POI 更全；有 key 时优先走这里，否则回退上方 OSM） ----------
@@ -219,6 +233,9 @@ def main():
         time.sleep(5)  # 避限流
 
     print(f"共 {len(points)} 个 POI 点")
+    if len(points) < MIN_POIS:
+        print(f"◆ 抓取点太少(<{MIN_POIS})，保留现有 hz_density.json（demo）")
+        return
     grid = {}
     for lat, lon in points:
         key = (math.floor(lat / STEP), math.floor(lon / STEP))

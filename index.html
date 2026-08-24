@@ -447,10 +447,10 @@ async function renderHeat() {
   } else if (activeLayer === 'density') {
     if (!hzDensity) { status.textContent = '繁华数据加载中…'; return; }
     const cells = hzDensity.cells, max = cells[0] ? cells[0].value : 1;
-    grad = { 0.0: '#3b82f6', 0.25: '#22c55e', 0.5: '#eab308', 0.75: '#f97316', 1.0: '#dc2626' };
-    pts = cells.map(c => [c.lat, c.lng, c.value / max]);
+    grad = { 0.0: '#cfe8ff', 0.25: '#67c56e', 0.5: '#e6c34a', 0.78: '#f0893b', 1.0: '#e0332f' };
+    pts = cells.map(c => [c.lat, c.lng, Math.pow(c.value / max, 0.35)]);
     title.textContent = '🏢 繁华程度'; low.textContent = '低'; high.textContent = '高';
-    bar.style.background = 'linear-gradient(90deg,#3b82f6,#22c55e,#eab308,#f97316,#dc2626)';
+    bar.style.background = 'linear-gradient(90deg,#cfe8ff,#67c56e,#e6c34a,#f0893b,#e0332f)';
     status.textContent = `繁华度 · ${cells.length} 网格（${hzDensity.meta.source === 'demo' ? '演示数据' : '真实 POI'}）`;
   } else if (activeLayer === 'events') {
     if (!hzEvents.length) { status.textContent = '事件数据加载中…'; return; }
@@ -461,7 +461,7 @@ async function renderHeat() {
     status.textContent = `共 ${hzEvents.length} 条事件 · 点击红点看详情`;
   }
 
-  hzHeat = L.heatLayer(pts, { radius: 55, blur: 30, maxZoom: 15, gradient: grad });
+  hzHeat = L.heatLayer(pts, { radius: 62, blur: 40, maxZoom: 15, gradient: grad });
   hzHeat.addTo(hzMap);
   if (activeLayer === 'events') {
     hzMarkers = L.layerGroup();
