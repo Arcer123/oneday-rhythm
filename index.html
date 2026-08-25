@@ -184,8 +184,17 @@ tabs.forEach(t => t.addEventListener('click', () => {
 // ---------- 一天话题节奏 ----------
 let rhythmChart = null, rhythmDone = false, lastRhythm = null;
 
+// 外部来源（微博热搜词、事件文本）会被插进 innerHTML，必须先转义，防 DOM XSS。
+function esc(s) {
+  return String(s == null ? '' : s).replace(/[&<>"']/g, (c) => ({
+    '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;',
+  }[c]));
+}
+
 function renderTags(el, topics) {
-  el.innerHTML = topics.map(t => `<span class="tag">${t.word}<span class="mini mood-${t.mood}">${t.mood}</span></span>`).join('');
+  el.innerHTML = topics.map(t =>
+    `<span class="tag">${esc(t.word)}<span class="mini mood-${esc(t.mood)}">${esc(t.mood)}</span></span>`
+  ).join('');
 }
 
 async function loadRhythm(live) {
@@ -258,8 +267,8 @@ function renderRhythm(data) {
   const liveEl = document.getElementById('rhythm-live');
   const moodEl = document.getElementById('rhythm-mood');
   if (live && live.topics && live.topics.length) {
-    liveEl.innerHTML = `<div style="margin-bottom:6px;">此刻热搜 · 主导情绪：<b>${live.mood}</b></div>` +
-      live.topics.slice(0, 5).map(t => `<div>· ${t.word}</div>`).join('');
+    liveEl.innerHTML = `<div style="margin-bottom:6px;">此刻热搜 · 主导情绪：<b>${esc(live.mood)}</b></div>` +
+      live.topics.slice(0, 5).map(t => `<div>· ${esc(t.word)}</div>`).join('');
     moodEl.innerHTML = '';
   } else {
     liveEl.innerHTML = '<div>点击右上角「抓取此刻热搜」，把当前真实话题画到时间轴上。</div>';
@@ -404,12 +413,16 @@ async function loadAirQuality() {
     + '&current=european_aqi,pm2_5';
   const res = await fetch(url);
   const data = await res.json();
-  const list = data || [];
+  const list = (data || []).filter((d) => d && d.current);
   if (!hzPoints.length) {
     hzPoints = list.map(d => ({ lat: d.latitude, lng: d.longitude, aqi: d.current.european_aqi, pm25: d.current.pm2_5 }));
   } else {
-    list.forEach((d, i) => {
-      if (hzPoints[i]) {
+    // 按坐标（而非下标）合并，避免两套网格顺序不一致时把 AQI 贴错格点
+    const r3 = (n) => Math.round(n * 1000) / 1000;
+    const indexByCoord = new Map(hzPoints.map((p, i) => [`${r3(p.lat)},${r3(p.lng)}`, i]));
+    list.forEach((d) => {
+      const i = indexByCoord.get(`${r3(d.latitude)},${r3(d.longitude)}`);
+      if (i != null && hzPoints[i]) {
         hzPoints[i].aqi = d.current.european_aqi;
         hzPoints[i].pm25 = d.current.pm2_5;
       }
@@ -508,7 +521,7 @@ async function renderHeat() {
     pts = hzEvents.map(e => [e.lat, e.lng, 1]);
     title.textContent = '📰 新闻 / 事件'; low.textContent = '少'; high.textContent = '多';
     bar.style.background = 'linear-gradient(90deg,#22c55e,#eab308,#dc2626)';
-    status.textContent = `共 ${hzEvents.length} 条事件 · 点击红点看详情`;
+    status.textContent = `共 ${hzEvents.length} 条示例事件（非实时） · 点击红点看详情`;
   }
 
   hzHeat = L.heatLayer(pts, { radius: 62, blur: 40, maxZoom: 15, gradient: grad });
@@ -518,7 +531,7 @@ async function renderHeat() {
     hzEvents.forEach(e => {
       L.circleMarker([e.lat, e.lng], {
         radius: 7, color: '#fff', weight: 1, fillColor: '#dc2626', fillOpacity: .92,
-      }).bindPopup(`<b>${e.type}</b> · ${e.title}<br/>${e.time}`).addTo(hzMarkers);
+      }).bindPopup(`<b>${esc(e.type)}</b> · ${esc(e.title)}<br/>${esc(e.time)}<br/><span style="color:var(--muted)">（示例事件 · 非实时）</span>`).addTo(hzMarkers);
     });
     hzMarkers.addTo(hzMap);
   }

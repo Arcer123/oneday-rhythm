@@ -18,6 +18,7 @@ import re
 import threading
 import time
 import urllib.request
+import datetime
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from urllib.parse import urlparse, parse_qs
 
@@ -90,16 +91,26 @@ def mood_from_text(text):
     return "中性", 0.5
 
 
+def beijing_hour(ts=None):
+    """返回时间戳（默认当前）对应的北京时间小时（UTC+8），0-23。
+
+    服务器可能部署在世界各地，且 Cloudflare 边缘默认 UTC；统一用北京时区，
+    保证本地与云端统计的“此刻/时段”一致。中国无夏令时，固定 +8 即可。
+    """
+    ts = int(time.time()) if ts is None else int(ts)
+    return (datetime.datetime.utcfromtimestamp(ts).hour + 8) % 24
+
+
 # 六类话题关键词词典：把热搜词归入热力图的六条赛道
 CATEGORY_KEYWORDS = {
     "工作·通勤": ["工作", "上班", "下班", "加班", "辞职", "离职", "内卷", "通勤", "地铁", "公交",
                "堵", "同事", "老板", "工位", "工资", "薪资", "简历", "面试", "裁员", "996", "打工人"],
     "社会·新闻": ["通报", "回应", "公布", "官方", "警方", "教育局", "央视", "曝光", "调查", "发布",
-               "辟谣", "记者", "新闻", "事件", "通报", "回应", "坠", "失联", "争议", "事故"],
+               "辟谣", "记者", "新闻", "事件", "坠", "失联", "争议", "事故"],
     "消费·购物": ["价格", "涨价", "降价", "买", "购物", "消费", "电商", "双十一", "618", "优惠",
                "补贴", "手机", "苹果", "汽车", "首付", "房价", "楼市", "套餐", "退款", "抢购"],
     "情感·emo": ["爱", "分手", "恋爱", "前任", "失恋", "单身", "孤独", "难过", "哭", "emo",
-               "焦虑", "抑郁", "想哭", "治愈", "暗恋", "告白", "emo", "勇气"],
+               "焦虑", "抑郁", "想哭", "治愈", "暗恋", "告白", "勇气"],
     "娱乐·明星": ["明星", "演唱会", "电视剧", "电影", "综艺", "剧", "歌手", "演员", "票房", "女二",
                "男团", "女团", "cp", "官宣", "娱乐圈", "导演", "女主", "开机"],
     "健康·生活": ["健康", "医院", "病", "体检", "睡眠", "熬夜", "减肥", "健身", "养生", "疫苗",
@@ -292,7 +303,7 @@ def append_history(ts, topics):
                     history = json.load(f)
             except Exception:
                 history = []
-        history.append({"ts": ts, "hour": time.localtime(ts).tm_hour, "topics": topics})
+        history.append({"ts": ts, "hour": beijing_hour(ts), "topics": topics})
         # 只保留最近 HOT_HISTORY_MAX 次采样，避免无限膨胀
         history = history[-HOT_HISTORY_MAX:]
         with open(HOT_HISTORY, "w", encoding="utf-8") as f:
@@ -323,7 +334,7 @@ def load_rhythm(live=False):
         "categories": cats,
         "day": real["day"] or DAY_TOPICS,
         "night": real["night"] or NIGHT_TOPICS,
-        "now_hour": time.localtime().tm_hour,
+        "now_hour": beijing_hour(),
         "live": {"ts": None, "topics": [], "mood": "中性"},
         "status": {
             "sample_count": real["sample_count"],
@@ -419,6 +430,8 @@ class Handler(BaseHTTPRequestHandler):
         self.send_response(status)
         self.send_header("Content-Type", content_type)
         self.send_header("Content-Length", str(len(body)))
+        self.send_header("X-Content-Type-Options", "nosniff")
+        self.send_header("Referrer-Policy", "no-referrer")
         self.send_header("Access-Control-Allow-Origin", "*")
         self.end_headers()
         self.wfile.write(body)

@@ -8,12 +8,16 @@
  * 静态资源（js/css/图片）用「缓存优先 + 后台刷新」，兼顾速度和更新。
  * API 请求（/api/*）和跨域请求始终走网络。
  */
-const CACHE = "rhythm-v2";
+const CACHE = "rhythm-v3";
 const SHELL = [
   "/",
   "/index.html",
   "/manifest.json",
+  "/icon-192.png",
+  "/icon-512.png",
   "/apple-touch-icon.png",
+  "/hz_density.json",
+  "/events.json",
   "/vendor/echarts.min.js",
   "/vendor/leaflet.js",
   "/vendor/leaflet-heat.js",
@@ -21,12 +25,13 @@ const SHELL = [
 ];
 
 self.addEventListener("install", (e) => {
-  e.waitUntil(
-    caches.open(CACHE)
-      .then((c) => c.addAll(SHELL))
-      .catch(() => {})
-      .then(() => self.skipWaiting())
-  );
+  // 逐项缓存：某项失败（如某个资源暂不可用）不拖垮整个 shell，
+  // 其余资源仍能离线缓存，避免历史上 addAll 一失败就全盘不缓存。
+  e.waitUntil((async () => {
+    const cache = await caches.open(CACHE);
+    await Promise.allSettled(SHELL.map((u) => cache.add(u)));
+    await self.skipWaiting();
+  })());
 });
 
 self.addEventListener("activate", (e) => {

@@ -146,7 +146,9 @@ export async function onRequestGet({ env, request }) {
   const url = new URL(request.url);
   const live = url.searchParams.get("live") === "1";
   const now = Math.floor(Date.now() / 1000);
-  const hour = new Date().getHours();
+  // Cloudflare 边缘默认 UTC，用北京时区（UTC+8）保证与本地 server.py 一致；
+  // 否则“此刻”竖线和 24h 采样时段会整体偏移。中国无夏令时，固定 +8。
+  const hour = (new Date().getUTCHours() + 8) % 24;
 
   let history = [];
   try { history = JSON.parse((await env.DATA.get("history")) || "[]"); } catch (e) {}
