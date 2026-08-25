@@ -55,6 +55,8 @@ python3 server.py 8090
 - **空气层**是真实 **European AQI**（Open-Meteo 空气质量接口），按 0.04° 格点取值，替代了原来的假空气种子点。
 - 另有「🏢 繁华（`hz_density.json`，由 `fetch_density.py` 抓 **高德 / 百度 POI** 生成）」与「📰 事件（`events.json`）」图层。
 
+> 底图默认用 **Esri 街道图**，加载失败会自动兜底到 **CARTO → OpenStreetMap**（均为 WGS84/Web Mercator，与热力点对齐），并在面板提示当前底图源与切换状态。`events.json` 为**示例数据（非实时）**，页面会明确标注。
+
 ## 目录结构
 
 ```
@@ -88,7 +90,7 @@ social-heatmap/
 
 - 后端：Python 标准库 `http.server`，无 pip 依赖（`urllib` 抓微博热搜）
 - 前端：ECharts 5（热力图）+ Leaflet 1.9 + leaflet.heat（杭州热力）
-- 库文件在 `vendor/`，可离线跑（杭州底图用 OpenStreetMap，需联网）
+- 库文件在 `vendor/`，可离线跑（杭州底图需联网，优先 Esri，失败自动切 CARTO/OSM）
 
 ## 后续可接的真实数据
 
