@@ -72,10 +72,10 @@ DEMO_PROVINCES = [
 
 
 # 简单关键词 -> 情绪 分类（用于从热搜词推断情绪，粗糙但够看）
-NEGATIVE = {"爆", "怒", "哭", "痛", "难", "跌", "涨", "惨", "死", "崩塌",
+NEGATIVE = {"爆", "怒", "哭", "痛", "难", "跌", "惨", "死", "崩塌",
             "争议", "质问", "曝光", "调查", "悲剧", "坠", "失联", "退款",
             "裁员", "恐慌", "抢购"}
-POSITIVE = {"喜", "赢", "涨", "好", "开心", "笑", "冠军", "破纪录", "回暖",
+POSITIVE = {"喜", "赢", "好", "开心", "笑", "冠军", "破纪录", "回暖",
             "治愈", "浪漫", "幸福", "新生", "成功", "突破"}
 
 
@@ -383,9 +383,16 @@ def auto_sampler_loop():
 
 def load_emotion(live=False):
     """返回情绪数据。live=True 且能抓到热搜时混入实时数据。"""
-    with open(EMOTION_DEMO, "r", encoding="utf-8") as f:
-        demo = json.load(f)
-    result = {"source": "demo", "updated": int(time.time()), "provinces": demo["provinces"], "topics": []}
+    # data/ 被 .gitignore 排除，全新克隆时 emotion_demo.json 可能不存在，
+    # 这里回退到内置的 DEMO_PROVINCES，避免 /api/emotion 直接 500。
+    provinces = DEMO_PROVINCES
+    if os.path.exists(EMOTION_DEMO):
+        try:
+            with open(EMOTION_DEMO, "r", encoding="utf-8") as f:
+                provinces = json.load(f).get("provinces") or DEMO_PROVINCES
+        except Exception:
+            provinces = DEMO_PROVINCES
+    result = {"source": "demo", "updated": int(time.time()), "provinces": provinces, "topics": []}
     if live:
         topics = fetch_weibo_topics()
         if topics:
@@ -461,7 +468,7 @@ class Handler(BaseHTTPRequestHandler):
                 self._send(404, "text/plain", "not found")
                 return
             ext = os.path.splitext(fpath)[1].lower()
-            mime = {"js": "application/javascript", ".css": "text/css",
+            mime = {".js": "application/javascript", ".css": "text/css",
                     ".json": "application/json", ".png": "image/png"}.get(ext, "application/octet-stream")
             with open(fpath, "rb") as f:
                 self._send(200, mime, f.read())

@@ -58,8 +58,9 @@ class _WebShellState extends State<WebShell> {
           if (mounted) setState(() => _loading = false);
         },
         onWebResourceError: (err) {
-          // 只对主框架报错弹提示，忽略子资源（如地图瓦片）的个别失败
-          if (err.isForMainFrame != false && mounted) {
+          // 只对主框架报错弹提示，忽略子资源（如地图瓦片）的个别失败。
+          // 部分安卓版本对子资源会返回 null，用 == true 可安全忽略。
+          if (err.isForMainFrame == true && mounted) {
             setState(() {
               _error = err.description?.isNotEmpty == true
                   ? err.description!

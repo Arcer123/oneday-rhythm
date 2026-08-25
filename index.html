@@ -107,7 +107,7 @@
   <div class="brand">🌗 一天话题节奏</div>
   <div class="tabs">
     <div class="tab active" data-view="rhythm">一天话题节奏</div>
-    <div class="tab" data-view="hangzhou">杭州噪音/空气地图</div>
+    <div class="tab" data-view="hangzhou">杭州城市热力</div>
   </div>
   <button class="live-btn" id="live-btn">⚡ 抓取此刻热搜</button>
 </div>
@@ -156,6 +156,7 @@
         <button class="layer-tog" data-layer="events">📰 事件</button>
       </div>
       <div class="hint" style="color:var(--muted);font-size:12px;margin-top:8px;">实时天气/空气来自 Open-Meteo 公开接口。</div>
+      <div id="hz-basemap" style="color:var(--muted);font-size:12px;margin-top:4px;">底图：加载中…</div>
     </div>
     <div class="panel" id="hz-legend" style="right:16px;bottom:16px;">
       <div id="legend-title" style="font-weight:600;margin-bottom:6px;">🌡️ 温度 (°C)</div>
@@ -272,7 +273,10 @@ function horizonChart(chart, cats, nowHour) {
     { xAxis: '20:00', itemStyle: { color: 'rgba(255,209,102,.10)' } }
   ], [
     { xAxis: '22:00', itemStyle: { color: 'rgba(30,111,217,.12)' } },
-    { xAxis: '0:00', itemStyle: { color: 'rgba(30,111,217,.12)' } }
+    { xAxis: '23:00', itemStyle: { color: 'rgba(30,111,217,.12)' } }
+  ], [
+    { xAxis: '0:00', itemStyle: { color: 'rgba(30,111,217,.12)' } },
+    { xAxis: '2:00', itemStyle: { color: 'rgba(30,111,217,.12)' } }
   ]];
   chart.setOption({
     series: [{
@@ -301,14 +305,60 @@ async function initHangzhou() {
   const lay = new URLSearchParams(location.search).get('layer');
   if (['temp', 'rain', 'density', 'events'].includes(lay)) activeLayer = lay;
   hzMap = L.map('hz-map').setView(HZ_CENTER, 12);
-  L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
-    maxZoom: 19, attribution: '© OpenStreetMap' }).addTo(hzMap);
+  addBaseLayer(0);
   document.querySelectorAll('.layer-tog[data-layer]').forEach(b =>
     b.addEventListener('click', () => { activeLayer = b.dataset.layer; renderHeat(); }));
   document.querySelectorAll('.layer-tog[data-layer]').forEach(b =>
     b.classList.toggle('active', b.dataset.layer === activeLayer));
   await Promise.all([loadWeather(), loadUrban()]);
   hzInitialized = true;
+}
+
+// ---------- 底图：多源自动兜底 ----------
+// 所有源都是标准 Web Mercator(WGS84) 坐标系，与热力点完全对齐，
+// 因此切换底图不会造成热力层偏移。先试最可能可达的源，失败自动切下一个。
+const BASE_PROVIDERS = [
+  { name: 'Esri 街道图', url: 'https://server.arcgisonline.com/ArcGIS/rest/services/World_Street_Map/MapServer/tile/{z}/{y}/{x}', maxZoom: 19, attribution: '© Esri' },
+  { name: 'CARTO', url: 'https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}.png', subdomains: 'abcd', maxZoom: 20, attribution: '© OpenStreetMap · © CARTO' },
+  { name: 'OpenStreetMap', url: 'https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', subdomains: 'abc', maxZoom: 19, attribution: '© OpenStreetMap' },
+];
+let baseIndex = 0, baseLayer = null, baseErrs = 0;
+const BASE_ERR_THRESHOLD = 6;
+
+function updateBaseHint(msg) {
+  const el = document.getElementById('hz-basemap');
+  if (el) el.textContent = msg;
+}
+
+function addBaseLayer(fromIndex) {
+  if (fromIndex >= BASE_PROVIDERS.length) {
+    updateBaseHint('⚠️ 所有底图源都不可用，请检查网络后刷新');
+    return;
+  }
+  baseIndex = fromIndex;
+  baseErrs = 0;
+  if (baseLayer) hzMap.removeLayer(baseLayer);
+  const p = BASE_PROVIDERS[fromIndex];
+  baseLayer = L.tileLayer(p.url, {
+    maxZoom: p.maxZoom, attribution: p.attribution, subdomains: p.subdomains || 'abc',
+  });
+  baseLayer.on('tileload', () => { baseErrs = 0; updateBaseHint(`底图：${p.name} · 正常`); });
+  baseLayer.on('tileerror', () => {
+    if (baseIndex !== fromIndex) return; // 已经切走了
+    baseErrs++;
+    if (baseErrs >= BASE_ERR_THRESHOLD) {
+      if (fromIndex < BASE_PROVIDERS.length - 1) {
+        updateBaseHint(`底图“${p.name}”不可用，自动切换备用源…`);
+        setTimeout(() => { if (baseIndex === fromIndex) addBaseLayer(fromIndex + 1); }, 800);
+      } else {
+        updateBaseHint('⚠️ 所有底图源都不可用，请检查网络后刷新');
+      }
+    } else if (baseErrs >= 2) {
+      updateBaseHint(`底图：${p.name}（部分瓦片加载失败，重试中…）`);
+    }
+  });
+  baseLayer.addTo(hzMap);
+  updateBaseHint(`底图：${p.name} · 加载中…`);
 }
 
 async function loadWeather() {
