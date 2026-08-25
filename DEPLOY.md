@@ -67,3 +67,19 @@ python3 server.py 8090
 ```
 
 打开 `http://127.0.0.1:8090`。本地用 `server.py`，云端用 `functions/`，接口一致（`/api/rhythm`），前端代码不用改。
+
+## 日常更新流程（一键上线）
+
+日常改功能（99% 的情况）走这条链路，**无需重打包、无需重装**：
+
+1. 在根目录改 `index.html`（或功能/数据脚本）；
+2. 一键发布：`zsh deploy.sh "更新说明"`；
+3. Cloudflare Pages 1-2 分钟内自动重新发布到 `https://oneday-rhythm.pages.dev`；
+4. 手机打开 App（原生壳）或 PWA 即自动同步，壳右下角圆形刷新按钮可强制拉最新。
+
+只有改原生壳本身（图标/应用名/默认地址）时才需要重新打包：
+
+```bash
+zsh native_shell/build_apk.sh
+# 产物：~/dev/oneday/build/app/outputs/flutter-apk/app-release.apk
+```
