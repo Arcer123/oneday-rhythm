@@ -41,8 +41,8 @@
   .src { color: var(--muted); font-size: 12px; }
 
   /* rhythm 页面布局 */
-  #rhythm-view { position: relative; flex-direction: column; }
-  #rhythm-view.active { display: flex; }
+  #view-rhythm { position: relative; flex-direction: column; }
+  #view-rhythm.active { display: flex; }
   #rhythm-chart { flex: 1 1 auto; min-height: 0; position: relative; }
   #rhythm-info { top: 16px; left: 16px; max-width: 300px; }
   #rhythm-info .desc { color: var(--muted); font-size: 12px; line-height: 1.6; margin-top: 6px; }
@@ -114,7 +114,7 @@
 
 <div class="main">
   <!-- 一天话题节奏 -->
-  <div class="view active" id="rhythm-view">
+  <div class="view active" id="view-rhythm">
     <div id="rhythm-chart"></div>
     <div class="panel" id="rhythm-info">
       <h3>🌗 大家的一天在聊什么</h3>
