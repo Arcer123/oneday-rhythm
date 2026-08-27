@@ -371,21 +371,18 @@ function addBaseLayer(fromIndex) {
 }
 
 async function loadWeather() {
-  const step = 0.04;
-  const lats = [], lngs = [];
-  for (let la = HZ_BBOX.lat0; la <= HZ_BBOX.lat1 + 0.001; la += step) {
-    for (let ln = HZ_BBOX.lng0; ln <= HZ_BBOX.lng1 + 0.001; ln += step) {
-      lats.push(+la.toFixed(3)); lngs.push(+ln.toFixed(3));
-    }
-  }
+  const { lats, lngs } = buildGrid();
   const url = 'https://api.open-meteo.com/v1/forecast?latitude='
     + lats.join(',') + '&longitude=' + lngs.join(',')
     + '&current=temperature_2m,precipitation';
   try {
     const res = await fetch(url);
     const data = await res.json();
-    hzPoints = (data || []).map(d => ({
-      lat: d.latitude, lng: d.longitude,
+    const list = (data || []).slice(0, lats.length).filter((d) => d && d.current);
+    // 用请求网格坐标定位，而非 Open-Meteo 返回值：其多地点响应的坐标会
+    // 偏移/四舍五入（如请求 30.0 返回 29.9824），直接用会让热力点整体漂移。
+    hzPoints = list.map((d, i) => ({
+      lat: lats[i], lng: lngs[i],
       temp: d.current.temperature_2m, precip: d.current.precipitation,
     }));
     document.getElementById('hz-status').textContent =
