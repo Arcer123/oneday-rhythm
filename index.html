@@ -41,7 +41,7 @@
   .src { color: var(--muted); font-size: 12px; }
 
   /* rhythm 页面布局 */
-  #view-rhythm { position: relative; flex-direction: column; }
+  #view-rhythm { position: relative; flex-direction: column; overflow-y: auto; }
   #view-rhythm.active { display: flex; }
   #rhythm-chart { flex: 1 1 auto; min-height: 0; position: relative; }
   #rhythm-info { top: 16px; left: 16px; max-width: 300px; }
@@ -96,7 +96,7 @@
       margin: 0; border-radius: 0; border-left: 0; border-right: 0; border-top: 0; order: -1; }
     #band-panel { display: none; }
     #topic-cards { flex-direction: column; padding: 0 10px 10px; }
-    #rhythm-chart { min-height: 200px; max-height: 56vh; }
+    #rhythm-chart { min-height: 440px; max-height: none; }
     #hangzhou-controls { top: 10px; left: 10px; right: 10px; width: auto; }
     .legend { display: none; }
   }
