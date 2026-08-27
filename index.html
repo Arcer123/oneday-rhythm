@@ -229,7 +229,7 @@ function renderRhythm(data) {
   rhythmChart.setOption({
     backgroundColor: 'transparent',
     grid: { left: isMobile ? 82 : 120, right: isMobile ? 26 : 82,
-      top: isMobile ? 40 : 196, bottom: 40 },
+      top: isMobile ? 40 : 268, bottom: 40 },
     tooltip: { position: 'top', backgroundColor: 'rgba(22,27,34,.95)', borderColor: '#30363d',
       textStyle: { color: '#e6edf3' },
       formatter: p => `<b>${p.value[1] != null ? cats[p.value[1]].name : ''}</b><br/>${hours[p.value[0]]} · 热度 ${p.value[2]}` },
