@@ -1,11 +1,30 @@
 #!/bin/zsh
 set -e
 
-# ---------- 本机工具链（已装好）----------
-export JAVA_HOME=/Users/admin/dev/jdk17/jdk-17.0.20.1+1/Contents/Home
-export ANDROID_HOME=/Users/admin/dev/android-sdk
-export ANDROID_SDK_ROOT=$ANDROID_HOME
-export PATH="$ANDROID_HOME/platform-tools:$ANDROID_HOME/cmdline-tools/latest/bin:$JAVA_HOME/bin:$HOME/dev/flutter/bin:$PATH"
+# ---------- 工具链（优先环境变量，其次常见路径自动探测） ----------
+export JAVA_HOME="${JAVA_HOME:-}"
+if [ -z "$JAVA_HOME" ]; then
+  for c in /Users/admin/dev/jdk17/jdk-17.0.20.1+1/Contents/Home /Library/Java/JavaVirtualMachines/*/Contents/Home; do
+    [ -d "$c" ] && JAVA_HOME="$c" && break
+  done
+fi
+export ANDROID_HOME="${ANDROID_HOME:-${ANDROID_SDK_ROOT:-}}"
+if [ -z "$ANDROID_HOME" ]; then
+  for c in /Users/admin/dev/android-sdk "$HOME/Library/Android/sdk"; do
+    [ -d "$c" ] && ANDROID_HOME="$c" && break
+  done
+fi
+export ANDROID_SDK_ROOT="${ANDROID_SDK_ROOT:-$ANDROID_HOME}"
+export FLUTTER_BIN="${FLUTTER_BIN:-$HOME/dev/flutter/bin}"
+if ! command -v flutter >/dev/null 2>&1 && [ -x "$FLUTTER_BIN/flutter" ]; then
+  export PATH="$FLUTTER_BIN:$PATH"
+fi
+export PATH="$ANDROID_HOME/platform-tools:$ANDROID_HOME/cmdline-tools/latest/bin:$JAVA_HOME/bin:$PATH"
+
+if ! command -v flutter >/dev/null 2>&1; then
+  echo "✗ 未找到 flutter，请设置 FLUTTER_BIN 或把 flutter 加入 PATH" >&2
+  exit 1
+fi
 
 # 国内镜像
 export FLUTTER_STORAGE_BASE_URL=https://storage.flutter-io.cn

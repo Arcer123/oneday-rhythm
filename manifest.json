@@ -1,10 +1,13 @@
 {
+  "id": "/",
   "name": "一天话题节奏",
   "short_name": "话题节奏",
+  "lang": "zh-CN",
   "description": "看看大家一天在聊什么：白天焦虑什么，深夜聊什么。",
   "start_url": "/",
   "scope": "/",
   "display": "standalone",
+  "display_override": ["standalone", "minimal-ui"],
   "background_color": "#0d1117",
   "theme_color": "#0d1117",
   "icons": [

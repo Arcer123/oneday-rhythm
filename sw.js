@@ -8,7 +8,7 @@
  * 静态资源（js/css/图片）用「缓存优先 + 后台刷新」，兼顾速度和更新。
  * API 请求（/api/*）和跨域请求始终走网络。
  */
-const CACHE = "rhythm-v3";
+const CACHE = "rhythm-v4";
 const SHELL = [
   "/",
   "/index.html",
@@ -48,7 +48,9 @@ self.addEventListener("fetch", (e) => {
 
   // 跨域 & 数据接口：永远走网络，保证实时
   if (url.origin !== self.location.origin || url.pathname.startsWith("/api/")) {
-    e.respondWith(fetch(e.request));
+    // 失败返回 504：底图瓦片会触发 tileerror（从而正常走多源兜底），
+    // 接口请求则由页面自身的 catch 处理；同时避免 SW 里出现未处理拒绝。
+    e.respondWith(fetch(e.request).catch(() => new Response("", { status: 504, statusText: "offline" })));
     return;
   }
 
@@ -57,8 +59,11 @@ self.addEventListener("fetch", (e) => {
     e.respondWith(
       fetch(e.request)
         .then((res) => {
-          const copy = res.clone();
-          caches.open(CACHE).then((c) => c.put(e.request, copy));
+          // 只缓存“成功”的 HTML，避免把 500 等错误页缓存进离线壳
+          if (res.ok) {
+            const copy = res.clone();
+            caches.open(CACHE).then((c) => c.put(e.request, copy));
+          }
           return res;
         })
         .catch(() => caches.match(e.request).then((hit) => hit || caches.match("/")))
