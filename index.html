@@ -312,7 +312,7 @@ let activeLayer = 'temp';
 
 async function initHangzhou() {
   const lay = new URLSearchParams(location.search).get('layer');
-  if (['temp', 'rain', 'density', 'events'].includes(lay)) activeLayer = lay;
+  if (['temp', 'rain', 'air', 'density', 'events'].includes(lay)) activeLayer = lay;
   hzMap = L.map('hz-map').setView(HZ_CENTER, 12);
   addBaseLayer(0);
   document.querySelectorAll('.layer-tog[data-layer]').forEach(b =>
@@ -417,12 +417,11 @@ async function loadAirQuality() {
   if (!hzPoints.length) {
     hzPoints = list.map(d => ({ lat: d.latitude, lng: d.longitude, aqi: d.current.european_aqi, pm25: d.current.pm2_5 }));
   } else {
-    // 按坐标（而非下标）合并，避免两套网格顺序不一致时把 AQI 贴错格点
-    const r3 = (n) => Math.round(n * 1000) / 1000;
-    const indexByCoord = new Map(hzPoints.map((p, i) => [`${r3(p.lat)},${r3(p.lng)}`, i]));
-    list.forEach((d) => {
-      const i = indexByCoord.get(`${r3(d.latitude)},${r3(d.longitude)}`);
-      if (i != null && hzPoints[i]) {
+    // 天气与空气用完全相同的网格与顺序请求，因此按“下标”合并即可。
+    // 注意：Open-Meteo「空气多地点」会把坐标四舍五入到 1 位小数，
+    // “按坐标匹配”会全部落空（天气接口返回的坐标又不同），故不能用坐标匹配。
+    list.forEach((d, i) => {
+      if (hzPoints[i]) {
         hzPoints[i].aqi = d.current.european_aqi;
         hzPoints[i].pm25 = d.current.pm2_5;
       }
