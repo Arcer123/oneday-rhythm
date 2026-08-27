@@ -89,7 +89,7 @@ social-heatmap/
 ## 技术栈
 
 - 后端：Python 标准库 `http.server`，无 pip 依赖（`urllib` 抓微博热搜）
-- 前端：ECharts 5（热力图）+ Leaflet 1.9 + leaflet.heat（杭州热力）
+- 前端：ECharts 5（热力图）+ Leaflet 1.1（vendor 内置）+ leaflet.heat（杭州热力）
 - 库文件在 `vendor/`，可离线跑（杭州底图需联网，优先 Esri，失败自动切 CARTO/OSM）
 
 ## 后续可接的真实数据
