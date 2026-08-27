@@ -143,7 +143,7 @@ def fetch_weibo_topics(limit=15):
         },
     )
     try:
-        with urllib.request.urlopen(req, timeout=6) as resp:
+        with urllib.request.urlopen(req, timeout=10) as resp:
             payload = json.loads(resp.read().decode("utf-8"))
         realtime = payload.get("data", {}).get("realtime", []) or []
         topics = []
