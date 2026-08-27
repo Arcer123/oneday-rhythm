@@ -448,6 +448,9 @@ async function loadUrban() {
   catch (e) { console.error('density', e); }
   try { hzEvents = await (await fetch('/events.json')).json(); }
   catch (e) { console.error('events', e); }
+  // 若用户在这之前已切到“繁华/示例事件”，数据到位后补一次渲染，
+  // 避免状态一直停在“加载中”。
+  if (hzMap && (activeLayer === 'density' || activeLayer === 'events')) renderHeat();
 }
 
 async function renderHeat() {
